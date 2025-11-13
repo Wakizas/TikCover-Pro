@@ -97,11 +97,31 @@ const App: React.FC = () => {
           },
         });
         
-        const firstPart = response.candidates?.[0]?.content?.parts?.[0];
-        if (firstPart && 'inlineData' in firstPart && firstPart.inlineData) {
-            return `data:${firstPart.inlineData.mimeType};base64,${firstPart.inlineData.data}`;
+        // FIX: Improved response handling to be more robust and align with best practices.
+        const candidate = response.candidates?.[0];
+        if (!candidate) {
+          const blockReason = response.promptFeedback?.blockReason;
+          if (blockReason) {
+            throw new Error(`La requête a été bloquée. Raison : ${blockReason}`);
+          }
+          throw new Error("Aucun candidat n'a été retourné par l'API. La réponse est vide.");
         }
-        throw new Error(`Aucune image générée pour le style ${variation}.`);
+
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+          throw new Error(`La génération a été interrompue. Raison : ${candidate.finishReason}`);
+        }
+
+        if (!candidate.content?.parts) {
+          throw new Error(`La réponse de l'API est invalide ou a été bloquée (Raison de fin: ${candidate.finishReason}).`);
+        }
+
+        for (const part of candidate.content.parts) {
+          if (part.inlineData) {
+            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          }
+        }
+        
+        throw new Error(`Aucune donnée d'image trouvée dans la réponse pour le style ${variation}.`);
       });
 
       const results = await Promise.all(imagePromises);
